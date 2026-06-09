@@ -1,49 +1,138 @@
-## Goal
+## WasteIQ AI — Phase 2 Intelligence Upgrade
 
-Adopt the pasted WasteIQ AI design system as the project's source of truth for colors, typography, radii, shadows, gradients, buttons, cards, inputs, KPI tiles, sidebar, and chart palette. Keep all existing Tailwind/shadcn semantic tokens working (`bg-primary`, `bg-card`, `text-foreground`, etc.) so no component visuals break — we map the new brand values onto the existing token names.
+Scope: deepen analysis + dashboards on the existing pages (Overview, Insights, Analytics, Reports). No new routes, no IoT/marketplace, no redesign — only KPI cards, gauges, charts, and a smarter AI pipeline.
 
-## Changes
+---
 
-### 1. `src/styles.css` — rewrite token layer
+### 1. Smarter AI analysis (`src/lib/ai.functions.ts`)
 
-- Replace the current `:root` brand tokens with the new palette, converted to `oklch` (Tailwind v4 + shadcn requirement):
-  - `--primary` ← `#009879`, `--primary-glow` ← `#17B890`
-  - `--accent` ← `#35D6A6` (lighter variant `#73F5C8` kept as `--accent-glow`)
-  - `--secondary` ← `#0F172A` (dark slate, for `dark-gradient`)
-  - `--background` ← `#F8FAFC`, `--card`/`--popover`/`--surface` ← `#FFFFFF`
-  - `--foreground` ← `#0F172A`, `--muted-foreground` ← `#64748B`, plus a new `--text-muted` ← `#94A3B8`
-  - `--border` ← `#E2E8F0`, `--border-light` ← `#F1F5F9`, `--input` ← `#E2E8F0`
-  - `--ring` ← `#009879`
-  - Status tokens: `--success #22C55E`, `--warning #F59E0B`, `--destructive #EF4444`, `--info #3B82F6`
-  - Sidebar tokens: bg `#FFFFFF`, border `#E2E8F0`, active `--sidebar-primary` `#009879`, hover surface `#F1F5F9`
-  - Chart palette: `--chart-1..5` = `#009879, #17B890, #35D6A6, #22C55E, #0F172A`
-- Update `--radius` to `1rem` so shadcn `rounded-lg` ≈ 16px and `--radius-xl` ≈ 24px (matches spec's card radius). Add explicit `--radius-sm 8px`, `--radius-md 12px`, `--radius-lg 16px`, `--radius-xl 24px` overrides in `@theme inline`.
-- Replace shadow tokens with spec values: `--shadow-sm/md/lg/xl` using the rgba ramps from the spec, plus keep `--shadow-elegant` and `--shadow-glow` re-tuned to the new primary.
-- Update gradients:
-  - `--gradient-primary`: `linear-gradient(135deg, #009879, #17B890)` (hero / btn-primary)
-  - `--gradient-accent`: `linear-gradient(135deg, #009879, #35D6A6)` (green-gradient)
-  - `--gradient-dark`: `linear-gradient(135deg, #0F172A, #1E293B)`
-  - `--gradient-hero`: keep radial wash but re-tinted with new primary/accent
-- Refresh `.dark` block so dark mode uses the same brand hues with appropriate lightness (primary stays `#17B890`-ish, bg `#0F172A`, surface `#1E293B`).
-- Add utility classes to back the spec's class names: `.hero-gradient`, `.green-gradient`, `.dark-gradient`, `.glass` (rewritten to use the new translucent white + blur — standard `backdrop-filter` only, no `-webkit-` hand prefix per Tailwind v4 gotchas), `.kpi-card`, `.kpi-value`, `.kpi-label`, `.chart1..5`. Buttons/inputs/cards keep using shadcn components, but their visual tokens now match the spec automatically.
-- Typography: set base `font-family` stack to `Inter, "SF Pro Display", system-ui, sans-serif` (Inter is already loaded). Add base `h1 { font-size: clamp(40px, 6vw, 64px) }`, `h2 { clamp(32px, 4.5vw, 48px) }`, `h3 { 32px }` with the spec's weights, scoped under `@layer base` so existing per-page Tailwind size classes still override when needed.
+Replace the current prompt + JSON schema with a sustainability-consultant prompt that returns a richer structure:
 
-### 2. Components — light touch-ups (only where defaults clash)
+```ts
+{
+  total_waste_kg: number,
+  materials: [{
+    name: "PET" | "HDPE" | "Other Plastic" | "Cardboard" | "Paper" |
+          "Glass" | "Aluminium" | "Other Metal" | "Organic" | "General",
+    weight_kg: number,
+    composition_pct: number,   // 0–100, all sum ≈ 100
+    recyclable: boolean,
+    confidence: number,        // 0–100
+    unit_value_zar_per_kg: number,
+    recoverable_value_zar: number
+  }],
+  recyclable_pct: number,                 // landfill diversion potential
+  circular_economy_score: number,         // 0–100
+  landfill_diversion_score: number,       // 0–100
+  carbon_kg: number,                      // kg CO2e avoided
+  estimated_savings_zar: number,          // annualised disposal savings
+  recoverable_value_total_zar: number,
+  equivalences: { trees_planted: number, km_not_driven: number, bottles_removed: number },
+  recommendations: string[],              // consultant-tone, SA context
+  highlight: string                       // single "biggest opportunity" line
+}
+```
 
-- `src/components/ui/button.tsx`: change the `default` variant to use the brand gradient (`bg-gradient-primary`) and `rounded-xl` so the primary CTA matches the spec's pill-rounded green button. `secondary`/`outline` already align.
-- `src/components/ui/card.tsx`: bump default radius to `rounded-2xl` (24px) to match the spec's card radius. Shadow already pulls from tokens.
-- `src/components/ui/input.tsx`: bump to `rounded-xl` (14px) and `h-11` so inputs match the spec.
+Prompt rewrite tells the model to act as an SA circular-economy consultant, use realistic SA buy-back rates (PET ~R7/kg, HDPE ~R5, cardboard ~R1.5, aluminium ~R28, glass ~R0.5, paper ~R1.5), and write recommendations that quantify rand/kg/% impact (not "plastic bottles detected").
 
-No business logic, route, or content changes. No new dependencies.
+Keep `materials` as a new column on `insights`; aggregate the legacy `classification` map server-side for backward compatibility so old rows still render.
 
-## Out of scope
+### 2. Database migration
 
-- No edits to dashboard data flows, server functions, auth, or routes.
-- No replacement of shadcn components — only the variants/sizes above.
-- No new fonts loaded (Inter is already in use).
+Add to `public.insights` (nullable, so old rows keep working):
 
-## Technical notes
+- `materials jsonb default '[]'`
+- `circular_economy_score numeric`
+- `landfill_diversion_score numeric`
+- `recoverable_value_zar numeric`
+- `equivalences jsonb default '{}'`
+- `highlight text`
 
-- Tailwind v4 requires `oklch` for tokens consumed via `@theme inline`. Hex values from the spec will be converted to their `oklch` equivalents and a short comment kept next to each token showing the original hex for traceability.
-- `.glass` will use only the standard `backdrop-filter` property (no hand-written `-webkit-backdrop-filter`) to avoid the Lightning CSS dedupe issue that strips the standard property in production builds.
-- Existing pages reference Tailwind semantic classes (`bg-primary`, `text-foreground`, `bg-card`, `border-border`, `bg-gradient-primary`, `shadow-elegant`, `bg-hero`) — all keep working because we're remapping the underlying tokens, not renaming classes.
+GRANTs already cover the table; no policy changes needed.
+
+### 3. Dashboard data layer (`src/lib/dashboard.functions.ts`)
+
+Extend the aggregator to compute and return:
+
+- `kpis`: add `circularScore` (avg), `diversionScore` (avg), `recoverableValueZar` (sum), `recyclingPotentialPct` (= recyclablePct), plus equivalence totals (trees/km/bottles).
+- `materials`: array of `{ name, weight_kg, value_zar, recyclable }` summed across insights — feeds the bar chart, pie chart, value section.
+- `mixDonut`: `[{name:"Recyclable", value}, {name:"Landfill", value}]`.
+- Keep existing `series` and `classification` for back-compat.
+
+### 4. Overview redesign (same page, richer content) — `dashboard.index.tsx`
+
+KPI grid expanded to 7 premium cards (glassmorphism, large numbers, brand greens):
+Total Waste Analyzed · Circular Economy Score · Landfill Diversion Score · Estimated Annual Savings · Carbon Avoided · Recoverable Material Value · Recycling Potential.
+
+Two of these render as gauges, the rest as number cards:
+
+- **RadialGauge** component (Recharts `RadialBarChart`) for Circular Economy Score with band labels (Poor / Average / Good / Excellent).
+- **ProgressGauge** for Landfill Diversion Score using same band scale.
+
+Charts row (Recharts, brand palette):
+
+- Pie — waste composition % by material.
+- Bar — weight (kg) by material.
+- Line — waste trend over time (existing series, restyled).
+- Donut — Recyclable vs Landfill.
+
+Carbon impact card shows kg CO₂e + the 3 equivalences with icons.
+
+### 5. Insights page upgrade — `dashboard.insights.tsx`
+
+Each insight card becomes a mini-report:
+
+- Header: date, image thumbnail (signed URL), `highlight` line as a chip.
+- Material breakdown table: `Material · Weight · % · Recyclable · Confidence` (the user's example shape).
+- Three small KPI tiles: Circular Score, Diversion Score, Recoverable Value.
+- Recommendations rendered as numbered consultant-tone insights.
+- "Insight cards" strip at top of page surfaces the best aggregate findings ("90% of this stream is recyclable", "Potential savings R3,500", "Highest opportunity: Cardboard").
+
+### 6. Analytics page — `dashboard.analytics.tsx`
+
+Adds the donut (recyclable vs landfill) and a horizontal bar of material value (R) alongside existing trend charts. Same page, no new route.
+
+### 7. Investor-grade PDF — `dashboard.reports.tsx`
+
+Rewrite `downloadPDF` with `jspdf` + `jspdf-autotable` (already common pair; will add `jspdf-autotable` if missing). Sections, in order:
+
+1. Cover (logo, company, period, generated date)
+2. Executive Summary (narrative built from KPIs + highlight)
+3. Waste Composition (table + pct)
+4. Material Breakdown (per-material table with weight/value/recyclability)
+5. Circular Economy Score (with band)
+6. Landfill Diversion Score (with band)
+7. Estimated Cost Savings
+8. Recoverable Material Value
+9. Carbon Impact (kg + equivalences)
+10. Recommendations (numbered)
+11. Future Improvement Opportunities (derived from low-scoring materials)
+
+CSV export gains the new columns. Generated reports are also written to `public.reports.payload` for history.
+
+### 8. New presentation components
+
+Under `src/components/dashboard/`:
+
+- `KpiCard.tsx` — glassmorphism premium card, optional trend, large number.
+- `RadialGauge.tsx` — Recharts radial bar with band label.
+- `ProgressGauge.tsx` — horizontal gauge with Poor→Excellent ticks.
+- `MaterialTable.tsx` — per-material breakdown table.
+- `InsightChip.tsx` — colored highlight pill.
+- `EquivalenceTile.tsx` — icon + label + value (trees/km/bottles).
+
+Uses existing tokens only (`--primary #009879`, `--primary-light #17B890`, bg `#F8FAFC`, text `#0F172A`); adds a `--glass` token + `backdrop-blur` utility in `styles.css`.
+
+---
+
+### Technical notes
+
+- AI model stays `google/gemini-2.5-flash` (multimodal, cheap). JSON-mode response, defensive parser, fallback shape preserved.
+- All new fields are nullable → old insight rows still render (UI falls back to legacy `classification`/`recyclable_pct`).
+- All math (scores, equivalences, totals) computed server-side in `dashboard.functions.ts` so the client stays presentational.
+- No new routes, no auth changes, no storage changes.
+- Bundle additions: `jspdf-autotable` (~30KB) only.
+
+### Out of scope (per instructions)
+
+No redesign of layout/navigation, no new pages, no IoT/marketplace/smart bins, no auth or schema beyond the additive columns above.
