@@ -42,26 +42,39 @@ function Index() {
 function FacilityBanner() {
   return (
     <section className="mx-auto max-w-7xl px-4 pb-8 sm:px-6 lg:px-8">
-      <div className="relative overflow-hidden rounded-3xl shadow-elegant ring-1 ring-border/60">
-        <img
-          src={heroFacility}
-          alt="Workers sorting recyclable waste streams at a modern South African recycling facility"
-          width={1600}
-          height={1100}
-          className="h-[280px] w-full object-cover sm:h-[380px] md:h-[460px]"
-          loading="lazy"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-background/85 via-background/20 to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 p-6 md:p-10">
-          <div className="max-w-xl">
-            <p className="text-xs uppercase tracking-widest text-primary">From waste stream to value stream</p>
-            <h3 className="mt-2 text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-              Every kilogram measured. Every rand recovered.
-            </h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              We see what your collectors see — and turn it into ESG outcomes your board can audit.
-            </p>
+      <div className="grid overflow-hidden rounded-3xl shadow-elegant ring-1 ring-border/60 md:grid-cols-2">
+        <div className="relative order-2 flex flex-col justify-center bg-card p-8 md:order-1 md:p-12">
+          <p className="text-xs uppercase tracking-widest text-primary">From waste stream to value stream</p>
+          <h3 className="mt-3 text-2xl font-semibold tracking-tight text-foreground md:text-4xl">
+            Every kilogram measured. <span className="gradient-text">Every rand recovered.</span>
+          </h3>
+          <p className="mt-4 max-w-md text-base text-muted-foreground">
+            We see what your collectors see — and turn it into ESG outcomes your board can audit.
+          </p>
+          <div className="mt-6 grid grid-cols-3 gap-4 border-t border-border/60 pt-6">
+            <div>
+              <div className="text-xl font-semibold text-foreground md:text-2xl">98%</div>
+              <div className="text-xs text-muted-foreground">Stream accuracy</div>
+            </div>
+            <div>
+              <div className="text-xl font-semibold text-foreground md:text-2xl">R2.4M</div>
+              <div className="text-xs text-muted-foreground">Avg. savings / yr</div>
+            </div>
+            <div>
+              <div className="text-xl font-semibold text-foreground md:text-2xl">42%</div>
+              <div className="text-xs text-muted-foreground">Less to landfill</div>
+            </div>
           </div>
+        </div>
+        <div className="relative order-1 min-h-[260px] md:order-2 md:min-h-[420px]">
+          <img
+            src={heroFacility}
+            alt="Workers sorting recyclable waste streams at a modern South African recycling facility"
+            width={1600}
+            height={1100}
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+          />
         </div>
       </div>
     </section>
