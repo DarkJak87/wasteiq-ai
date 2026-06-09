@@ -36,7 +36,7 @@ function DashboardLayout() {
   return (
     <div className="flex min-h-screen bg-muted/30">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-border/60 bg-sidebar md:flex">
-        <div className="px-5 py-4"><Logo /></div>
+        <div className="px-5 py-4"><Logo size="md" /></div>
         <nav className="flex-1 space-y-1 px-3">
           {NAV.map((n) => {
             const active = n.exact ? pathname === n.to : pathname.startsWith(n.to);
@@ -58,7 +58,7 @@ function DashboardLayout() {
       </aside>
       <div className="flex flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border/60 bg-background/80 px-4 backdrop-blur-xl md:px-6">
-          <div className="md:hidden"><Logo /></div>
+          <div className="md:hidden"><Logo size="md" /></div>
           <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
             <span className="hidden md:inline">Powered by AI</span>
           </div>
