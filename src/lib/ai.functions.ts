@@ -72,9 +72,10 @@ export const analyzeUpload = createServerFn({ method: "POST" })
     if (!res.ok) {
       const txt = await res.text();
       await supabase.from("uploads").update({ status: "failed", error: `AI ${res.status}` }).eq("id", up.id);
+      console.error("[AI] gateway error", res.status, txt.slice(0, 500));
       if (res.status === 429) throw new Error("AI rate limit reached. Please try again shortly.");
       if (res.status === 402) throw new Error("AI credits exhausted. Please top up in workspace settings.");
-      throw new Error(`AI gateway error: ${res.status} ${txt.slice(0, 200)}`);
+      throw new Error("Analysis failed. Please try again.");
     }
     const json = await res.json();
     const raw = json.choices?.[0]?.message?.content ?? "{}";
