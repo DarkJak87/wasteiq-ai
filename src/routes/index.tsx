@@ -34,7 +34,6 @@ function Index() {
       <HowItWorks />
       <Stats />
       <Testimonials />
-      <PricingPreview />
       <CTA />
     </MarketingShell>
   );
