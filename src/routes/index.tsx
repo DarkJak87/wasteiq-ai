@@ -7,6 +7,9 @@ import {
   ArrowRight, Brain, BarChart3, Recycle, Leaf, Gauge, PiggyBank, ShieldCheck, Sparkles,
   CheckCircle2, Upload, FileSearch, LineChart, Sprout,
 } from "lucide-react";
+import heroFacility from "@/assets/hero-facility.jpg";
+import teamDashboard from "@/assets/team-dashboard.jpg";
+import materialsFlatlay from "@/assets/materials-flatlay.jpg";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -25,6 +28,7 @@ function Index() {
   return (
     <MarketingShell>
       <Hero />
+      <FacilityBanner />
       <LogoStrip />
       <Features />
       <HowItWorks />
@@ -33,6 +37,35 @@ function Index() {
       <PricingPreview />
       <CTA />
     </MarketingShell>
+  );
+}
+
+function FacilityBanner() {
+  return (
+    <section className="mx-auto max-w-7xl px-4 pb-8 sm:px-6 lg:px-8">
+      <div className="relative overflow-hidden rounded-3xl shadow-elegant ring-1 ring-border/60">
+        <img
+          src={heroFacility}
+          alt="Workers sorting recyclable waste streams at a modern South African recycling facility"
+          width={1600}
+          height={1100}
+          className="h-[280px] w-full object-cover sm:h-[380px] md:h-[460px]"
+          loading="lazy"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-background/85 via-background/20 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 p-6 md:p-10">
+          <div className="max-w-xl">
+            <p className="text-xs uppercase tracking-widest text-primary">From waste stream to value stream</p>
+            <h3 className="mt-2 text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+              Every kilogram measured. Every rand recovered.
+            </h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              We see what your collectors see — and turn it into ESG outcomes your board can audit.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
