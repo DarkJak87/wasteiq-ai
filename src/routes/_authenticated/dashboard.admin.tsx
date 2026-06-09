@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
 import { Shield } from "lucide-react";
+import { getAdminStats, getAdminStatus } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard/admin")({
   component: AdminPage,
@@ -11,24 +12,23 @@ export const Route = createFileRoute("/_authenticated/dashboard/admin")({
 function AdminPage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [stats, setStats] = useState<{ companies: number; uploads: number; insights: number } | null>(null);
+  const fnStatus = useServerFn(getAdminStatus);
+  const fnStats = useServerFn(getAdminStats);
 
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setIsAdmin(false); return; }
-      const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
-      const admin = !!roles?.some((r) => r.role === "admin");
-      setIsAdmin(admin);
-      if (admin) {
-        const [{ count: c }, { count: u }, { count: i }] = await Promise.all([
-          supabase.from("companies").select("*", { count: "exact", head: true }),
-          supabase.from("uploads").select("*", { count: "exact", head: true }),
-          supabase.from("insights").select("*", { count: "exact", head: true }),
-        ]);
-        setStats({ companies: c ?? 0, uploads: u ?? 0, insights: i ?? 0 });
+      try {
+        const { isAdmin: admin } = await fnStatus();
+        setIsAdmin(admin);
+        if (admin) {
+          const s = await fnStats();
+          setStats(s);
+        }
+      } catch {
+        setIsAdmin(false);
       }
     })();
-  }, []);
+  }, [fnStatus, fnStats]);
 
   if (isAdmin === null) return <p className="text-sm text-muted-foreground">Checking permissions…</p>;
   if (!isAdmin) return (
