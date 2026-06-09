@@ -4,18 +4,48 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const Input = z.object({ uploadId: z.string().uuid() });
 
-const SYS = `You are WasteIQ AI, an expert circular-economy analyst for South African businesses.
-Analyze the provided waste image or document and return STRICT JSON ONLY (no prose, no markdown fences) with this exact shape:
+const SYS = `You are WasteIQ AI — a senior circular-economy consultant advising South African businesses.
+Analyze the provided waste image or document like a sustainability auditor: estimate composition, weight, recyclability,
+landfill diversion potential, carbon impact, recoverable material value (ZAR) and disposal cost savings.
+
+Use realistic South African buy-back / recycler rates (R/kg, indicative):
+PET R7, HDPE R5, Other Plastic R2, Cardboard R1.5, Paper R1.5, Glass R0.5, Aluminium R28, Other Metal R8, Organic R0, General R0.
+Use realistic carbon avoidance factors (kg CO2e per kg recycled) ~ PET 2.5, HDPE 1.8, Cardboard 0.9, Paper 1.1, Glass 0.3, Aluminium 9.0, Metal 4.0, Organic 0.5.
+
+Return STRICT JSON ONLY (no prose, no markdown fences) with this exact shape:
 {
   "summary": string,
-  "recommendations": string[],
-  "classification": { "plastic": number, "glass": number, "paper": number, "metal": number, "organic": number, "general": number },
+  "highlight": string,
+  "total_waste_kg": number,
+  "materials": [
+    {
+      "name": "PET" | "HDPE" | "Other Plastic" | "Cardboard" | "Paper" | "Glass" | "Aluminium" | "Other Metal" | "Organic" | "General",
+      "weight_kg": number,
+      "composition_pct": number,
+      "recyclable": boolean,
+      "confidence": number,
+      "unit_value_zar_per_kg": number,
+      "recoverable_value_zar": number
+    }
+  ],
   "recyclable_pct": number,
-  "estimated_savings_zar": number,
+  "circular_economy_score": number,
+  "landfill_diversion_score": number,
   "carbon_kg": number,
-  "total_waste_kg": number
+  "estimated_savings_zar": number,
+  "recoverable_value_total_zar": number,
+  "equivalences": { "trees_planted": number, "km_not_driven": number, "bottles_removed": number },
+  "recommendations": string[]
 }
-Classification values are percentages (0-100) and should sum to ~100. Use realistic SA waste-collection benchmarks for cost (R/kg) and carbon (kg CO2e/kg).`;
+
+Rules:
+- composition_pct values across materials must sum to ~100.
+- confidence is 0-100.
+- circular_economy_score and landfill_diversion_score are 0-100 (Poor 0-30, Average 31-60, Good 61-80, Excellent 81-100).
+- recommendations: 3-5 items, written as an SA sustainability consultant — quantify rand, kg or % impact, mention practical SA actions (separation at source, buy-back centres, composting, PETCO/Polyco streams, MRF partners). Do NOT just describe what you see.
+- highlight is ONE short sentence naming the biggest opportunity (e.g. "Cardboard recycling could recover ~R450 and divert 35% of this stream from landfill.").
+- estimated_savings_zar is an ANNUALISED disposal-cost saving if recommendations are adopted.
+- Include only materials actually present (>0 kg).`;
 
 export const analyzeUpload = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -79,23 +109,60 @@ export const analyzeUpload = createServerFn({ method: "POST" })
     }
     const json = await res.json();
     const raw = json.choices?.[0]?.message?.content ?? "{}";
-    let parsed: any;
-    try { parsed = typeof raw === "string" ? JSON.parse(raw) : raw; }
-    catch { parsed = { summary: String(raw).slice(0, 500), recommendations: [], classification: {}, recyclable_pct: 0, estimated_savings_zar: 0, carbon_kg: 0, total_waste_kg: 0 }; }
+    let p: any;
+    try { p = typeof raw === "string" ? JSON.parse(raw) : raw; } catch { p = {}; }
+
+    type Mat = { name: string; weight_kg: number; composition_pct: number; recyclable: boolean; confidence: number; unit_value_zar_per_kg: number; recoverable_value_zar: number };
+    const materials: Mat[] = Array.isArray(p.materials) ? p.materials.map((m: any) => ({
+      name: String(m?.name ?? "General"),
+      weight_kg: num(m?.weight_kg),
+      composition_pct: num(m?.composition_pct),
+      recyclable: Boolean(m?.recyclable),
+      confidence: clamp(num(m?.confidence), 0, 100),
+      unit_value_zar_per_kg: num(m?.unit_value_zar_per_kg),
+      recoverable_value_zar: num(m?.recoverable_value_zar),
+    })) : [];
+
+    // Build legacy classification map for back-compat
+    const groups: Record<string, string[]> = {
+      plastic: ["PET", "HDPE", "Other Plastic"],
+      paper: ["Paper", "Cardboard"],
+      glass: ["Glass"],
+      metal: ["Aluminium", "Other Metal"],
+      organic: ["Organic"],
+      general: ["General"],
+    };
+    const classification: Record<string, number> = { plastic: 0, glass: 0, paper: 0, metal: 0, organic: 0, general: 0 };
+    for (const [k, names] of Object.entries(groups)) {
+      classification[k] = materials.filter((m) => names.includes(m.name)).reduce((s, m) => s + (m.composition_pct || 0), 0);
+    }
+
+    const recoverable_total = p.recoverable_value_total_zar != null
+      ? num(p.recoverable_value_total_zar)
+      : materials.reduce((s, m) => s + (m.recoverable_value_zar || 0), 0);
 
     const { error: insErr } = await supabase.from("insights").insert({
       upload_id: up.id,
       company_id: up.company_id,
-      summary: parsed.summary ?? null,
-      recommendations: parsed.recommendations ?? [],
-      classification: parsed.classification ?? {},
-      recyclable_pct: Number(parsed.recyclable_pct ?? 0),
-      estimated_savings_zar: Number(parsed.estimated_savings_zar ?? 0),
-      carbon_kg: Number(parsed.carbon_kg ?? 0),
-      total_waste_kg: Number(parsed.total_waste_kg ?? 0),
+      summary: p.summary ?? null,
+      highlight: p.highlight ?? null,
+      recommendations: Array.isArray(p.recommendations) ? p.recommendations : [],
+      classification,
+      materials,
+      recyclable_pct: clamp(num(p.recyclable_pct), 0, 100),
+      circular_economy_score: clamp(num(p.circular_economy_score), 0, 100),
+      landfill_diversion_score: clamp(num(p.landfill_diversion_score), 0, 100),
+      estimated_savings_zar: num(p.estimated_savings_zar),
+      recoverable_value_zar: recoverable_total,
+      carbon_kg: num(p.carbon_kg),
+      total_waste_kg: num(p.total_waste_kg),
+      equivalences: p.equivalences ?? {},
     });
     if (insErr) throw new Error(insErr.message);
 
     await supabase.from("uploads").update({ status: "processed", error: null }).eq("id", up.id);
     return { ok: true };
   });
+
+function num(v: any): number { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+function clamp(n: number, lo: number, hi: number): number { return Math.max(lo, Math.min(hi, n)); }

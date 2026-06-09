@@ -3,28 +3,29 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboardData } from "@/lib/dashboard.functions";
 import { Card } from "@/components/ui/card";
-import { Recycle, Leaf, Coins, Upload as UploadIcon, Sparkles, TrendingDown } from "lucide-react";
-import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, Legend } from "recharts";
+import { Recycle, Leaf, Coins, Sparkles, TrendingDown, Trees, Car, Droplets, Banknote, Gauge } from "lucide-react";
+import {
+  AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid,
+  PieChart, Pie, Cell, Legend, BarChart, Bar,
+} from "recharts";
+import { KpiCard } from "@/components/dashboard/KpiCard";
+import { RadialGauge } from "@/components/dashboard/RadialGauge";
+import { ProgressGauge } from "@/components/dashboard/ProgressGauge";
+import { EquivalenceTile } from "@/components/dashboard/EquivalenceTile";
 
 export const Route = createFileRoute("/_authenticated/dashboard/")({
   component: Overview,
 });
 
-const COLORS = ["#0F766E", "#84CC16", "#14532D", "#22D3EE", "#F59E0B", "#94A3B8"];
+const MIX_COLORS = ["#009879", "#17B890", "#35D6A6", "#73F5C8", "#F59E0B", "#94A3B8"];
+const DONUT_COLORS = ["#009879", "#CBD5E1"];
 
 function Overview() {
   const fn = useServerFn(getDashboardData);
   const { data, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: () => fn() });
 
   const k = data?.kpis;
-  const kpis = [
-    { label: "Total Uploads", value: k?.totalUploads ?? 0, icon: UploadIcon },
-    { label: "AI Insights", value: k?.totalInsights ?? 0, icon: Sparkles },
-    { label: "Waste Analyzed", value: `${(k?.totalWasteKg ?? 0).toFixed(0)} kg`, icon: Recycle },
-    { label: "Recyclable", value: `${(k?.recyclablePct ?? 0).toFixed(0)}%`, icon: Leaf },
-    { label: "Est. Savings", value: `R ${(k?.savingsZar ?? 0).toFixed(0)}`, icon: Coins },
-    { label: "Carbon Avoided", value: `${(k?.carbonKg ?? 0).toFixed(0)} kg`, icon: TrendingDown },
-  ];
+  const fmt = (n?: number, d = 0) => (isLoading ? "—" : (n ?? 0).toFixed(d));
 
   return (
     <div className="space-y-6">
@@ -33,59 +34,123 @@ function Overview() {
         <p className="text-sm text-muted-foreground">Your circular-economy performance at a glance.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {kpis.map((kpi) => (
-          <Card key={kpi.label} className="p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wider text-muted-foreground">{kpi.label}</span>
-              <kpi.icon className="h-4 w-4 text-primary" />
+      {/* Gauges row */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="p-5 backdrop-blur-xl bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0.65))]">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Circular Economy Score</h3>
+            <Gauge className="h-4 w-4 text-primary" />
+          </div>
+          <RadialGauge value={k?.circularScore ?? 0} label="Circular" sub="Composite circularity" />
+        </Card>
+        <Card className="p-5 backdrop-blur-xl bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0.65))]">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Landfill Diversion Score</h3>
+            <Recycle className="h-4 w-4 text-primary" />
+          </div>
+          <ProgressGauge value={k?.diversionScore ?? 0} label="Share of waste kept out of landfill" />
+          <div className="mt-6">
+            <div className="flex items-center justify-between text-xs text-muted-foreground"><span>Recycling Potential</span><span>{fmt(k?.recyclingPotentialPct)}%</span></div>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-gradient-to-r from-primary to-[#17B890]" style={{ width: `${Math.min(100, k?.recyclingPotentialPct ?? 0)}%` }} />
             </div>
-            <div className="mt-2 text-2xl font-semibold">{isLoading ? "—" : kpi.value}</div>
-          </Card>
-        ))}
+          </div>
+        </Card>
+        <Card className="p-5 backdrop-blur-xl bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0.65))]">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Carbon Impact</h3>
+            <Leaf className="h-4 w-4 text-primary" />
+          </div>
+          <div className="text-3xl font-semibold tracking-tight">{fmt(k?.carbonKg)} <span className="text-sm font-normal text-muted-foreground">kg CO₂e avoided</span></div>
+          <div className="mt-4 grid grid-cols-1 gap-2">
+            <EquivalenceTile icon={Trees} label="Trees planted" value={fmt(k?.trees)} />
+            <EquivalenceTile icon={Car} label="Km not driven" value={fmt(k?.km)} />
+            <EquivalenceTile icon={Droplets} label="Bottles removed" value={fmt(k?.bottles)} />
+          </div>
+        </Card>
       </div>
 
+      {/* KPI cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard label="Total Waste Analyzed" value={`${fmt(k?.totalWasteKg)} kg`} icon={Recycle} sub={`${k?.totalInsights ?? 0} samples`} />
+        <KpiCard label="Estimated Annual Savings" value={`R ${fmt(k?.savingsZar)}`} icon={Coins} sub="If recommendations applied" accent />
+        <KpiCard label="Recoverable Material Value" value={`R ${fmt(k?.recoverableValueZar)}`} icon={Banknote} sub="Buy-back & recycler rates" />
+        <KpiCard label="AI Insights" value={k?.totalInsights ?? 0} icon={Sparkles} sub={`${k?.totalUploads ?? 0} uploads`} />
+      </div>
+
+      {/* Charts row */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="p-5 lg:col-span-2">
+        <Card className="p-5 lg:col-span-2 backdrop-blur-xl bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0.65))]">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-semibold">Waste trend (last 6 months)</h2>
-            <span className="text-xs text-muted-foreground">kg</span>
+            <h2 className="font-semibold">Waste trend</h2>
+            <span className="text-xs text-muted-foreground">last 6 months · kg</span>
           </div>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data?.series ?? []}>
                 <defs>
                   <linearGradient id="rec" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0F766E" stopOpacity={0.5} />
-                    <stop offset="95%" stopColor="#0F766E" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#009879" stopOpacity={0.5} />
+                    <stop offset="95%" stopColor="#009879" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="lan" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#84CC16" stopOpacity={0.5} />
-                    <stop offset="95%" stopColor="#84CC16" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#94A3B8" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#94A3B8" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <Tooltip contentStyle={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
-                <Area type="monotone" dataKey="landfill" stroke="#84CC16" fill="url(#lan)" name="Landfill" />
-                <Area type="monotone" dataKey="recycled" stroke="#0F766E" fill="url(#rec)" name="Recycled" />
+                <Area type="monotone" dataKey="landfill" stroke="#94A3B8" fill="url(#lan)" name="Landfill" />
+                <Area type="monotone" dataKey="recycled" stroke="#009879" fill="url(#rec)" name="Recycled" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </Card>
 
-        <Card className="p-5">
-          <h2 className="mb-3 font-semibold">Waste mix</h2>
+        <Card className="p-5 backdrop-blur-xl bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0.65))]">
+          <h2 className="mb-3 font-semibold">Recyclable vs Landfill</h2>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={data?.classification ?? []} dataKey="value" nameKey="name" innerRadius={50} outerRadius={90} paddingAngle={2}>
-                  {(data?.classification ?? []).map((_, i) => (<Cell key={i} fill={COLORS[i % COLORS.length]} />))}
+                <Pie data={data?.mixDonut ?? []} dataKey="value" nameKey="name" innerRadius={60} outerRadius={95} paddingAngle={3}>
+                  {(data?.mixDonut ?? []).map((_, i) => (<Cell key={i} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />))}
                 </Pie>
-                <Tooltip />
+                <Tooltip formatter={(v: any) => `${v} kg`} />
                 <Legend />
               </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="p-5 backdrop-blur-xl bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0.65))]">
+          <h2 className="mb-3 font-semibold">Waste composition</h2>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={data?.classification ?? []} dataKey="value" nameKey="name" outerRadius={95}>
+                  {(data?.classification ?? []).map((_, i) => (<Cell key={i} fill={MIX_COLORS[i % MIX_COLORS.length]} />))}
+                </Pie>
+                <Tooltip formatter={(v: any) => `${v}%`} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+        <Card className="p-5 backdrop-blur-xl bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0.65))]">
+          <h2 className="mb-3 font-semibold">Weight by material</h2>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data?.materials ?? []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="name" fontSize={11} interval={0} angle={-20} textAnchor="end" height={60} />
+                <YAxis fontSize={12} />
+                <Tooltip formatter={(v: any) => `${Number(v).toFixed(1)} kg`} />
+                <Bar dataKey="weight_kg" name="Weight (kg)" fill="#009879" radius={[6,6,0,0]} />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </Card>

@@ -112,12 +112,18 @@ export type Database = {
       insights: {
         Row: {
           carbon_kg: number | null
+          circular_economy_score: number | null
           classification: Json
           company_id: string
           created_at: string
+          equivalences: Json
           estimated_savings_zar: number | null
+          highlight: string | null
           id: string
+          landfill_diversion_score: number | null
+          materials: Json
           recommendations: Json
+          recoverable_value_zar: number | null
           recyclable_pct: number | null
           summary: string | null
           total_waste_kg: number | null
@@ -125,12 +131,18 @@ export type Database = {
         }
         Insert: {
           carbon_kg?: number | null
+          circular_economy_score?: number | null
           classification?: Json
           company_id: string
           created_at?: string
+          equivalences?: Json
           estimated_savings_zar?: number | null
+          highlight?: string | null
           id?: string
+          landfill_diversion_score?: number | null
+          materials?: Json
           recommendations?: Json
+          recoverable_value_zar?: number | null
           recyclable_pct?: number | null
           summary?: string | null
           total_waste_kg?: number | null
@@ -138,12 +150,18 @@ export type Database = {
         }
         Update: {
           carbon_kg?: number | null
+          circular_economy_score?: number | null
           classification?: Json
           company_id?: string
           created_at?: string
+          equivalences?: Json
           estimated_savings_zar?: number | null
+          highlight?: string | null
           id?: string
+          landfill_diversion_score?: number | null
+          materials?: Json
           recommendations?: Json
+          recoverable_value_zar?: number | null
           recyclable_pct?: number | null
           summary?: string | null
           total_waste_kg?: number | null
