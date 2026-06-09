@@ -82,11 +82,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "WasteIQ AI — Circular economy intelligence for South African businesses" },
       { name: "description", content: "AI-powered waste analytics that cut landfill, improve recycling, lower costs and prove ESG impact." },
       { name: "author", content: "WasteIQ AI" },
-      { property: "og:title", content: "WasteIQ AI" },
-      { property: "og:description", content: "AI-powered circular economy platform for South African businesses." },
+      { property: "og:title", content: "WasteIQ AI — Circular economy intelligence for South African businesses" },
+      { property: "og:description", content: "AI-powered waste analytics that cut landfill, improve recycling, lower costs and prove ESG impact." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "WasteIQ AI — Circular economy intelligence for South African businesses" },
+      { name: "twitter:description", content: "AI-powered waste analytics that cut landfill, improve recycling, lower costs and prove ESG impact." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/fa84c70b-4009-41d6-aefd-4935197eb715/id-preview-54a260a8--57d383c3-b99d-44a4-897f-341b676c6c56.lovable.app-1781004681260.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/fa84c70b-4009-41d6-aefd-4935197eb715/id-preview-54a260a8--57d383c3-b99d-44a4-897f-341b676c6c56.lovable.app-1781004681260.png" },
     ],
     links: [
       {
