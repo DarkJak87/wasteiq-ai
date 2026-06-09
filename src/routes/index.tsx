@@ -257,21 +257,39 @@ function HowItWorks() {
   return (
     <section className="border-y border-border/60 bg-muted/30">
       <div className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">From bin to boardroom in 4 steps</h2>
+        <div className="grid items-center gap-10 lg:grid-cols-2">
+          <div className="relative overflow-hidden rounded-3xl shadow-elegant ring-1 ring-border/60">
+            <img
+              src={teamDashboard}
+              alt="Two sustainability leads reviewing a WasteIQ AI dashboard on a tablet"
+              width={1400}
+              height={1000}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-widest text-primary">How it works</p>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">From bin to boardroom in 4 steps</h2>
+            <p className="mt-3 text-muted-foreground">
+              Built for sustainability teams who'd rather act than build spreadsheets.
+            </p>
+            <ol className="mt-8 space-y-4">
+              {steps.map((s, i) => (
+                <li key={s.title} className="flex gap-4 rounded-xl border border-border/60 bg-card p-4">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-primary text-sm font-bold text-primary-foreground">{i + 1}</span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <s.icon className="h-4 w-4 text-primary" />
+                      <h3 className="font-semibold">{s.title}</h3>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">{s.desc}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
         </div>
-        <ol className="mt-12 grid gap-6 md:grid-cols-4">
-          {steps.map((s, i) => (
-            <li key={s.title} className="relative rounded-2xl border border-border/60 bg-card p-6">
-              <div className="flex items-center gap-3">
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-primary text-xs font-bold text-primary-foreground">{i + 1}</span>
-                <s.icon className="h-5 w-5 text-primary" />
-              </div>
-              <h3 className="mt-4 text-lg font-semibold">{s.title}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{s.desc}</p>
-            </li>
-          ))}
-        </ol>
       </div>
     </section>
   );
