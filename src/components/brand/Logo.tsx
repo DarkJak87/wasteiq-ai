@@ -1,17 +1,29 @@
-import { Recycle } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import logoColor from "@/assets/wasteiq_logo.png.asset.json";
+import logoWhite from "@/assets/wasteiq_logo_white.png.asset.json";
 
-export function Logo({ className = "" }: { className?: string }) {
+const SIZE_CLASS = {
+  sm: "h-9",
+  md: "h-12",
+  lg: "h-16",
+} as const;
+
+type LogoProps = {
+  className?: string;
+  variant?: "color" | "white";
+  size?: keyof typeof SIZE_CLASS;
+};
+
+export function Logo({ className = "", variant = "color", size = "md" }: LogoProps) {
+  const src = variant === "white" ? logoWhite.url : logoColor.url;
   return (
-    <Link to="/" className={`group inline-flex items-center gap-2 font-semibold tracking-tight ${className}`}>
-      <span className="relative grid h-9 w-9 place-items-center rounded-xl bg-gradient-primary text-primary-foreground shadow-elegant">
-        <Recycle className="h-5 w-5" />
-        <span className="absolute inset-0 rounded-xl bg-gradient-primary opacity-0 blur-md transition-opacity group-hover:opacity-60" />
-      </span>
-      <span className="text-lg">
-        Waste<span className="gradient-text">IQ</span>
-        <span className="text-muted-foreground"> AI</span>
-      </span>
+    <Link to="/" aria-label="WasteIQ AI home" className={`inline-flex items-center ${className}`}>
+      <img
+        src={src}
+        alt="WasteIQ AI"
+        className={`${SIZE_CLASS[size]} w-auto select-none`}
+        draggable={false}
+      />
     </Link>
   );
 }
