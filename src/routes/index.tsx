@@ -383,7 +383,15 @@ function CTA() {
   return (
     <section className="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8">
       <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-gradient-card p-10 text-center shadow-elegant">
-        <div className="bg-hero animate-gradient absolute inset-0 -z-10 opacity-60" />
+        <img
+          src={materialsFlatlay}
+          alt="Flat-lay of sorted recyclable plastic bottles, cardboard and aluminium cans"
+          width={1600}
+          height={900}
+          className="absolute inset-0 -z-10 h-full w-full object-cover opacity-25"
+          loading="lazy"
+        />
+        <div className="bg-hero animate-gradient absolute inset-0 -z-10 opacity-50" />
         <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Turn your waste into a competitive edge</h2>
         <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">Join South African leaders building a circular economy with AI.</p>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
