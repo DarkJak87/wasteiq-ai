@@ -11,7 +11,7 @@ export const getDashboardData = createServerFn({ method: "GET" })
 
     const companyId = member?.company_id;
     if (!companyId) {
-      return { company: null, kpis: empty(), insights: [], uploads: [], series: [] };
+      return { company: null, kpis: empty(), insights: [], uploads: [], series: [], classification: [], materials: [], mixDonut: [] };
     }
 
     const [{ data: insights }, { data: uploads }] = await Promise.all([
@@ -24,6 +24,18 @@ export const getDashboardData = createServerFn({ method: "GET" })
     const recyclable = ins.length ? ins.reduce((s, i) => s + Number(i.recyclable_pct ?? 0), 0) / ins.length : 0;
     const savings = ins.reduce((s, i) => s + Number(i.estimated_savings_zar ?? 0), 0);
     const carbon = ins.reduce((s, i) => s + Number(i.carbon_kg ?? 0), 0);
+    const recoverable = ins.reduce((s, i) => s + Number((i as any).recoverable_value_zar ?? 0), 0);
+    const withCircular = ins.filter((i) => (i as any).circular_economy_score != null);
+    const circular = withCircular.length ? withCircular.reduce((s, i) => s + Number((i as any).circular_economy_score), 0) / withCircular.length : 0;
+    const withDiv = ins.filter((i) => (i as any).landfill_diversion_score != null);
+    const diversion = withDiv.length ? withDiv.reduce((s, i) => s + Number((i as any).landfill_diversion_score), 0) / withDiv.length : recyclable;
+    const eq = ins.reduce((acc, i) => {
+      const e = ((i as any).equivalences ?? {}) as Record<string, number>;
+      acc.trees += Number(e.trees_planted ?? 0);
+      acc.km += Number(e.km_not_driven ?? 0);
+      acc.bottles += Number(e.bottles_removed ?? 0);
+      return acc;
+    }, { trees: 0, km: 0, bottles: 0 });
 
     // Monthly series (last 6 months)
     const months: Record<string, { month: string; waste: number; recycled: number; landfill: number; savings: number }> = {};
@@ -54,6 +66,28 @@ export const getDashboardData = createServerFn({ method: "GET" })
     const clsTotal = Object.values(cls).reduce((a, b) => a + b, 0) || 1;
     const classification = Object.entries(cls).map(([name, v]) => ({ name, value: Math.round((v / clsTotal) * 100) }));
 
+    // Aggregate per-material breakdown
+    const matAgg: Record<string, { name: string; weight_kg: number; value_zar: number; recyclable: boolean }> = {};
+    for (const i of ins) {
+      const mats = ((i as any).materials ?? []) as any[];
+      for (const m of mats) {
+        const name = String(m?.name ?? "General");
+        const w = Number(m?.weight_kg ?? 0);
+        const v = Number(m?.recoverable_value_zar ?? 0);
+        if (!matAgg[name]) matAgg[name] = { name, weight_kg: 0, value_zar: 0, recyclable: Boolean(m?.recyclable) };
+        matAgg[name].weight_kg += w;
+        matAgg[name].value_zar += v;
+        matAgg[name].recyclable = matAgg[name].recyclable || Boolean(m?.recyclable);
+      }
+    }
+    const materials = Object.values(matAgg).sort((a, b) => b.weight_kg - a.weight_kg);
+
+    const recyclableKg = totalWaste * (recyclable / 100);
+    const mixDonut = [
+      { name: "Recyclable", value: Math.round(recyclableKg * 10) / 10 },
+      { name: "Landfill", value: Math.round((totalWaste - recyclableKg) * 10) / 10 },
+    ];
+
     return {
       company: member?.companies ?? null,
       kpis: {
@@ -63,14 +97,24 @@ export const getDashboardData = createServerFn({ method: "GET" })
         recyclablePct: recyclable,
         savingsZar: savings,
         carbonKg: carbon,
+        circularScore: circular,
+        diversionScore: diversion,
+        recoverableValueZar: recoverable,
+        recyclingPotentialPct: recyclable,
+        trees: eq.trees,
+        km: eq.km,
+        bottles: eq.bottles,
       },
       insights: ins,
       uploads: uploads ?? [],
       series: Object.values(months),
       classification,
+      materials,
+      mixDonut,
     };
   });
 
 function empty() {
-  return { totalUploads: 0, totalInsights: 0, totalWasteKg: 0, recyclablePct: 0, savingsZar: 0, carbonKg: 0 };
+  return { totalUploads: 0, totalInsights: 0, totalWasteKg: 0, recyclablePct: 0, savingsZar: 0, carbonKg: 0,
+    circularScore: 0, diversionScore: 0, recoverableValueZar: 0, recyclingPotentialPct: 0, trees: 0, km: 0, bottles: 0 };
 }
