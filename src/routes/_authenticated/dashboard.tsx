@@ -9,7 +9,8 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardLayout,
 });
 
-const NAV = [
+type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean };
+const NAV: NavItem[] = [
   { to: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
   { to: "/dashboard/uploads", label: "Uploads", icon: Upload },
   { to: "/dashboard/insights", label: "Insights", icon: Lightbulb },
@@ -18,7 +19,7 @@ const NAV = [
   { to: "/dashboard/settings", label: "Settings", icon: Settings },
   { to: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { to: "/dashboard/admin", label: "Admin", icon: Shield },
-] as const;
+];
 
 function DashboardLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -40,7 +41,7 @@ function DashboardLayout() {
           {NAV.map((n) => {
             const active = n.exact ? pathname === n.to : pathname.startsWith(n.to);
             return (
-              <Link key={n.to} to={n.to}
+              <Link key={n.to} to={n.to as "/dashboard"}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
                   active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}>
