@@ -112,7 +112,8 @@ export const analyzeUpload = createServerFn({ method: "POST" })
     let p: any;
     try { p = typeof raw === "string" ? JSON.parse(raw) : raw; } catch { p = {}; }
 
-    const materials = Array.isArray(p.materials) ? p.materials.map((m: any) => ({
+    type Mat = { name: string; weight_kg: number; composition_pct: number; recyclable: boolean; confidence: number; unit_value_zar_per_kg: number; recoverable_value_zar: number };
+    const materials: Mat[] = Array.isArray(p.materials) ? p.materials.map((m: any) => ({
       name: String(m?.name ?? "General"),
       weight_kg: num(m?.weight_kg),
       composition_pct: num(m?.composition_pct),
