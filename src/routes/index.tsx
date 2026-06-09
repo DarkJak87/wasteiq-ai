@@ -10,6 +10,9 @@ import {
 import heroFacility from "@/assets/hero-facility.jpg";
 import teamDashboard from "@/assets/team-dashboard.jpg";
 import materialsFlatlay from "@/assets/materials-flatlay.jpg";
+import managerTablet from "@/assets/manager-tablet.jpg";
+import fleetAerial from "@/assets/fleet-aerial.jpg";
+import boardroomCelebrate from "@/assets/boardroom-celebrate.jpg";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -30,12 +33,40 @@ function Index() {
       <Hero />
       <FacilityBanner />
       <LogoStrip />
+      <FleetBanner />
       <Features />
       <HowItWorks />
       <Stats />
       <Testimonials />
       <CTA />
     </MarketingShell>
+  );
+}
+
+function FleetBanner() {
+  return (
+    <section className="mx-auto max-w-7xl px-4 pt-16 sm:px-6 lg:px-8">
+      <div className="relative overflow-hidden rounded-3xl shadow-elegant ring-1 ring-border/60">
+        <img
+          src={fleetAerial}
+          alt="Aerial view of a clean fleet of waste collection trucks at a South African depot at sunrise"
+          width={1920}
+          height={900}
+          className="h-[240px] w-full object-cover sm:h-[320px] md:h-[400px]"
+          loading="lazy"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-background via-background/70 to-transparent" />
+        <div className="absolute inset-y-0 left-0 flex max-w-md flex-col justify-center p-6 sm:p-10 md:p-14">
+          <p className="text-xs uppercase tracking-widest text-primary">Connected to your collectors</p>
+          <h3 className="mt-2 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl md:text-4xl">
+            Your fleet, fully visible.
+          </h3>
+          <p className="mt-3 text-sm text-muted-foreground md:text-base">
+            Ingest collection data from any South African waste partner — manual, digital, or photo-based.
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -237,11 +268,27 @@ const FEATURES = [
 function Features() {
   return (
     <section className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-2xl text-center">
-        <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">An operating system for circular waste</h2>
-        <p className="mt-4 text-muted-foreground">
-          Every tool a sustainability lead needs — from upload to ESG-ready report — in one premium product.
-        </p>
+      <div className="grid items-center gap-10 lg:grid-cols-[1.1fr_1fr]">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-primary">Platform</p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+            An operating system for circular waste
+          </h2>
+          <p className="mt-4 text-muted-foreground">
+            Every tool a sustainability lead needs — from upload to ESG-ready report — in one premium product,
+            built for the realities of South African operations.
+          </p>
+        </div>
+        <div className="relative overflow-hidden rounded-3xl shadow-elegant ring-1 ring-border/60">
+          <img
+            src={managerTablet}
+            alt="Operations manager reviewing the WasteIQ AI dashboard on a tablet inside a warehouse"
+            width={1600}
+            height={1100}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        </div>
       </div>
       <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {FEATURES.map((f) => (
@@ -316,13 +363,34 @@ function Stats() {
   ];
   return (
     <section className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {items.map(([v, l]) => (
-          <Card key={l} className="border-border/60 bg-gradient-card p-6">
-            <div className="text-3xl font-semibold tracking-tight gradient-text">{v}</div>
-            <div className="mt-1 text-sm text-muted-foreground">{l}</div>
-          </Card>
-        ))}
+      <div className="grid items-center gap-10 lg:grid-cols-2">
+        <div className="relative overflow-hidden rounded-3xl shadow-elegant ring-1 ring-border/60 order-2 lg:order-1">
+          <img
+            src={boardroomCelebrate}
+            alt="South African business team celebrating sustainability targets in a sunlit boardroom"
+            width={1400}
+            height={1000}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        </div>
+        <div className="order-1 lg:order-2">
+          <p className="text-xs uppercase tracking-widest text-primary">Proof, not promises</p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+            Measurable wins, board-room ready.
+          </h2>
+          <p className="mt-3 text-muted-foreground">
+            The numbers that move investors, auditors and procurement teams — generated automatically from your data.
+          </p>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            {items.map(([v, l]) => (
+              <Card key={l} className="border-border/60 bg-gradient-card p-5">
+                <div className="text-3xl font-semibold tracking-tight gradient-text">{v}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{l}</div>
+              </Card>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   );
