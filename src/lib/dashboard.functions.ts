@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { WASTE_FACTORS, confidenceBand, normaliseMaterialName } from "@/lib/waste-factors";
 
 export const getDashboardData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -33,9 +34,14 @@ export const getDashboardData = createServerFn({ method: "GET" })
       const e = ((i as any).equivalences ?? {}) as Record<string, number>;
       acc.trees += Number(e.trees_planted ?? 0);
       acc.km += Number(e.km_not_driven ?? 0);
-      acc.bottles += Number(e.bottles_removed ?? 0);
+      acc.bottles += Number(e.bottles_recycled ?? e.bottles_removed ?? 0);
       return acc;
     }, { trees: 0, km: 0, bottles: 0 });
+
+    const withConfidence = ins.filter((i) => (i as any).confidence_score != null);
+    const confidenceScore = withConfidence.length
+      ? Math.round(withConfidence.reduce((s, i) => s + Number((i as any).confidence_score), 0) / withConfidence.length)
+      : 0;
 
     // Monthly series (last 6 months)
     const months: Record<string, { month: string; waste: number; recycled: number; landfill: number; savings: number }> = {};
@@ -67,20 +73,29 @@ export const getDashboardData = createServerFn({ method: "GET" })
     const classification = Object.entries(cls).map(([name, v]) => ({ name, value: Math.round((v / clsTotal) * 100) }));
 
     // Aggregate per-material breakdown
-    const matAgg: Record<string, { name: string; weight_kg: number; value_zar: number; recyclable: boolean }> = {};
+    const matAgg: Record<string, { name: string; weight_kg: number; value_zar: number; carbon_kg: number; recyclable: boolean; composition_pct: number }> = {};
     for (const i of ins) {
       const mats = ((i as any).materials ?? []) as any[];
       for (const m of mats) {
-        const name = String(m?.name ?? "General");
+        const name = normaliseMaterialName(String(m?.name ?? "General"));
         const w = Number(m?.weight_kg ?? 0);
-        const v = Number(m?.recoverable_value_zar ?? 0);
-        if (!matAgg[name]) matAgg[name] = { name, weight_kg: 0, value_zar: 0, recyclable: Boolean(m?.recyclable) };
+        const factor = (WASTE_FACTORS as any)[name];
+        const v = factor ? Math.round(w * factor.value_per_kg) : Number(m?.recoverable_value_zar ?? 0);
+        const c = factor ? Math.round(w * factor.carbon_per_kg * 10) / 10 : Number(m?.carbon_kg ?? 0);
+        if (!matAgg[name]) matAgg[name] = { name, weight_kg: 0, value_zar: 0, carbon_kg: 0, recyclable: factor ? factor.recyclable : Boolean(m?.recyclable), composition_pct: 0 };
         matAgg[name].weight_kg += w;
         matAgg[name].value_zar += v;
-        matAgg[name].recyclable = matAgg[name].recyclable || Boolean(m?.recyclable);
+        matAgg[name].carbon_kg += c;
       }
     }
-    const materials = Object.values(matAgg).sort((a, b) => b.weight_kg - a.weight_kg);
+    const matsArr = Object.values(matAgg);
+    const matWeightTotal = matsArr.reduce((s, m) => s + m.weight_kg, 0) || 1;
+    for (const m of matsArr) {
+      m.weight_kg = Math.round(m.weight_kg * 10) / 10;
+      m.carbon_kg = Math.round(m.carbon_kg * 10) / 10;
+      m.composition_pct = Math.round((m.weight_kg / matWeightTotal) * 100);
+    }
+    const materials = matsArr.sort((a, b) => b.weight_kg - a.weight_kg);
 
     const recyclableKg = totalWaste * (recyclable / 100);
     const mixDonut = [
@@ -104,6 +119,8 @@ export const getDashboardData = createServerFn({ method: "GET" })
         trees: eq.trees,
         km: eq.km,
         bottles: eq.bottles,
+        confidenceScore,
+        confidenceBand: confidenceBand(confidenceScore).label,
       },
       insights: ins,
       uploads: uploads ?? [],
@@ -116,5 +133,6 @@ export const getDashboardData = createServerFn({ method: "GET" })
 
 function empty() {
   return { totalUploads: 0, totalInsights: 0, totalWasteKg: 0, recyclablePct: 0, savingsZar: 0, carbonKg: 0,
-    circularScore: 0, diversionScore: 0, recoverableValueZar: 0, recyclingPotentialPct: 0, trees: 0, km: 0, bottles: 0 };
+    circularScore: 0, diversionScore: 0, recoverableValueZar: 0, recyclingPotentialPct: 0, trees: 0, km: 0, bottles: 0,
+    confidenceScore: 0, confidenceBand: "Low" as const };
 }

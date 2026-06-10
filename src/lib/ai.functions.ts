@@ -1,51 +1,44 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  WASTE_FACTORS,
+  LANDFILL_COST_PER_KG_ZAR,
+  ANNUALISATION_FACTOR,
+  computeMaterial,
+  computeEquivalences,
+  buildRecommendations,
+  buildHighlight,
+  type ComputedMaterial,
+} from "@/lib/waste-factors";
 
 const Input = z.object({ uploadId: z.string().uuid() });
 
-const SYS = `You are WasteIQ AI — a senior circular-economy consultant advising South African businesses.
-Analyze the provided waste image or document like a sustainability auditor: estimate composition, weight, recyclability,
-landfill diversion potential, carbon impact, recoverable material value (ZAR) and disposal cost savings.
-
-Use realistic South African buy-back / recycler rates (R/kg, indicative):
-PET R7, HDPE R5, Other Plastic R2, Cardboard R1.5, Paper R1.5, Glass R0.5, Aluminium R28, Other Metal R8, Organic R0, General R0.
-Use realistic carbon avoidance factors (kg CO2e per kg recycled) ~ PET 2.5, HDPE 1.8, Cardboard 0.9, Paper 1.1, Glass 0.3, Aluminium 9.0, Metal 4.0, Organic 0.5.
+// The AI ONLY detects materials. All values, scores, savings, carbon and
+// equivalences are computed deterministically server-side from waste-factors.ts.
+const SYS = `You are WasteIQ AI — a vision auditor that identifies waste materials in an image or document.
+Your ONLY job is to estimate the material composition. Do NOT invent prices, carbon values, recommendations or savings.
 
 Return STRICT JSON ONLY (no prose, no markdown fences) with this exact shape:
 {
-  "summary": string,
-  "highlight": string,
-  "total_waste_kg": number,
+  "summary": string,                  // 1-2 short sentences describing what you actually see
+  "total_waste_kg": number,           // best estimate of total weight in kg (use 10 if unsure)
+  "confidence_score": number,         // 0-100 overall detection confidence
   "materials": [
     {
       "name": "PET" | "HDPE" | "Other Plastic" | "Cardboard" | "Paper" | "Glass" | "Aluminium" | "Other Metal" | "Organic" | "General",
-      "weight_kg": number,
-      "composition_pct": number,
-      "recyclable": boolean,
-      "confidence": number,
-      "unit_value_zar_per_kg": number,
-      "recoverable_value_zar": number
+      "weight_kg": number,            // kg
+      "composition_pct": number,      // 0-100, all materials must sum to ~100
+      "confidence": number            // 0-100 per-material confidence
     }
-  ],
-  "recyclable_pct": number,
-  "circular_economy_score": number,
-  "landfill_diversion_score": number,
-  "carbon_kg": number,
-  "estimated_savings_zar": number,
-  "recoverable_value_total_zar": number,
-  "equivalences": { "trees_planted": number, "km_not_driven": number, "bottles_removed": number },
-  "recommendations": string[]
+  ]
 }
 
 Rules:
-- composition_pct values across materials must sum to ~100.
-- confidence is 0-100.
-- circular_economy_score and landfill_diversion_score are 0-100 (Poor 0-30, Average 31-60, Good 61-80, Excellent 81-100).
-- recommendations: 3-5 items, written as an SA sustainability consultant — quantify rand, kg or % impact, mention practical SA actions (separation at source, buy-back centres, composting, PETCO/Polyco streams, MRF partners). Do NOT just describe what you see.
-- highlight is ONE short sentence naming the biggest opportunity (e.g. "Cardboard recycling could recover ~R450 and divert 35% of this stream from landfill.").
-- estimated_savings_zar is an ANNUALISED disposal-cost saving if recommendations are adopted.
-- Include only materials actually present (>0 kg).`;
+- ONLY include materials actually visible (weight_kg > 0).
+- composition_pct across materials must sum to ~100.
+- Use the closest matching name from the allowed list above.
+- Do not output prices, ZAR values, recommendations, carbon, scores or equivalences — those are computed downstream.`;
 
 export const analyzeUpload = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -112,51 +105,65 @@ export const analyzeUpload = createServerFn({ method: "POST" })
     let p: any;
     try { p = typeof raw === "string" ? JSON.parse(raw) : raw; } catch { p = {}; }
 
-    type Mat = { name: string; weight_kg: number; composition_pct: number; recyclable: boolean; confidence: number; unit_value_zar_per_kg: number; recoverable_value_zar: number };
-    const materials: Mat[] = Array.isArray(p.materials) ? p.materials.map((m: any) => ({
-      name: String(m?.name ?? "General"),
-      weight_kg: num(m?.weight_kg),
-      composition_pct: num(m?.composition_pct),
-      recyclable: Boolean(m?.recyclable),
-      confidence: clamp(num(m?.confidence), 0, 100),
-      unit_value_zar_per_kg: num(m?.unit_value_zar_per_kg),
-      recoverable_value_zar: num(m?.recoverable_value_zar),
-    })) : [];
+    // ---- Deterministic computation pipeline ----
+    const detected: ComputedMaterial[] = Array.isArray(p.materials)
+      ? p.materials
+          .map((m: any) => computeMaterial(String(m?.name ?? "General"), num(m?.weight_kg), num(m?.composition_pct), num(m?.confidence)))
+          .filter((m: ComputedMaterial) => m.weight_kg > 0)
+      : [];
 
-    // Build legacy classification map for back-compat
-    const groups: Record<string, string[]> = {
-      plastic: ["PET", "HDPE", "Other Plastic"],
-      paper: ["Paper", "Cardboard"],
-      glass: ["Glass"],
-      metal: ["Aluminium", "Other Metal"],
-      organic: ["Organic"],
-      general: ["General"],
-    };
-    const classification: Record<string, number> = { plastic: 0, glass: 0, paper: 0, metal: 0, organic: 0, general: 0 };
-    for (const [k, names] of Object.entries(groups)) {
-      classification[k] = materials.filter((m) => names.includes(m.name)).reduce((s, m) => s + (m.composition_pct || 0), 0);
+    // Merge duplicate names (model occasionally returns same material twice)
+    const merged: Record<string, ComputedMaterial> = {};
+    for (const m of detected) {
+      if (!merged[m.name]) { merged[m.name] = { ...m }; }
+      else {
+        const e = merged[m.name];
+        const w = e.weight_kg + m.weight_kg;
+        e.weight_kg = Math.round(w * 10) / 10;
+        e.composition_pct = Math.min(100, e.composition_pct + m.composition_pct);
+        e.confidence = Math.round((e.confidence + m.confidence) / 2);
+        e.recoverable_value_zar = Math.round(w * WASTE_FACTORS[e.name].value_per_kg);
+        e.carbon_kg = Math.round(w * WASTE_FACTORS[e.name].carbon_per_kg * 10) / 10;
+      }
     }
+    const materials = Object.values(merged);
 
-    const recoverable_total = p.recoverable_value_total_zar != null
-      ? num(p.recoverable_value_total_zar)
-      : materials.reduce((s, m) => s + (m.recoverable_value_zar || 0), 0);
+    const total_waste_kg = materials.reduce((s, m) => s + m.weight_kg, 0) || num(p.total_waste_kg);
+    const recyclable_kg = materials.filter((m) => m.recyclable).reduce((s, m) => s + m.weight_kg, 0);
+    const diverted_plastic_kg = materials.filter((m) => m.stream === "plastic").reduce((s, m) => s + m.weight_kg, 0);
+
+    const recoverable_total = materials.reduce((s, m) => s + m.recoverable_value_zar, 0);
+    const carbon_kg = Math.round(materials.reduce((s, m) => s + m.carbon_kg, 0) * 10) / 10;
+    const recyclable_pct = total_waste_kg > 0 ? Math.round((recyclable_kg / total_waste_kg) * 100) : 0;
+    const circular_economy_score = recyclable_pct;
+    const landfill_diversion_score = recyclable_pct;
+    const estimated_savings_zar = Math.round(recyclable_kg * LANDFILL_COST_PER_KG_ZAR * ANNUALISATION_FACTOR + recoverable_total);
+    const equivalences = computeEquivalences(carbon_kg, diverted_plastic_kg);
+    const recommendations = buildRecommendations(materials);
+    const highlight = buildHighlight(materials) ?? (typeof p.highlight === "string" ? p.highlight : null);
+    const confidence_score = clamp(num(p.confidence_score) || avgConfidence(materials), 0, 100);
+
+    // Legacy classification map for back-compat with old charts
+    const classification: Record<string, number> = { plastic: 0, glass: 0, paper: 0, metal: 0, organic: 0, general: 0 };
+    for (const m of materials) classification[m.stream] += m.composition_pct;
 
     const { error: insErr } = await supabase.from("insights").insert({
       upload_id: up.id,
       company_id: up.company_id,
       summary: p.summary ?? null,
-      highlight: p.highlight ?? null,
-      recommendations: Array.isArray(p.recommendations) ? p.recommendations : [],
+      highlight,
+      recommendations,
       classification,
-      materials,
-      recyclable_pct: clamp(num(p.recyclable_pct), 0, 100),
-      circular_economy_score: clamp(num(p.circular_economy_score), 0, 100),
-      landfill_diversion_score: clamp(num(p.landfill_diversion_score), 0, 100),
-      estimated_savings_zar: num(p.estimated_savings_zar),
+      materials: materials as any,
+      recyclable_pct,
+      circular_economy_score,
+      landfill_diversion_score,
+      estimated_savings_zar,
       recoverable_value_zar: recoverable_total,
-      carbon_kg: num(p.carbon_kg),
-      total_waste_kg: num(p.total_waste_kg),
-      equivalences: p.equivalences ?? {},
+      carbon_kg,
+      total_waste_kg: Math.round(total_waste_kg * 10) / 10,
+      equivalences: equivalences as any,
+      confidence_score,
     });
     if (insErr) throw new Error(insErr.message);
 
@@ -166,3 +173,7 @@ export const analyzeUpload = createServerFn({ method: "POST" })
 
 function num(v: any): number { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 function clamp(n: number, lo: number, hi: number): number { return Math.max(lo, Math.min(hi, n)); }
+function avgConfidence(materials: ComputedMaterial[]): number {
+  if (!materials.length) return 0;
+  return Math.round(materials.reduce((s, m) => s + m.confidence, 0) / materials.length);
+}

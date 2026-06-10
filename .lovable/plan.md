@@ -1,138 +1,100 @@
-## WasteIQ AI — Phase 2 Intelligence Upgrade
+## WasteIQ AI — Phase 4: Report Accuracy & Consistency
 
-Scope: deepen analysis + dashboards on the existing pages (Overview, Insights, Analytics, Reports). No new routes, no IoT/marketplace, no redesign — only KPI cards, gauges, charts, and a smarter AI pipeline.
+Goal: every rand, kg CO₂e, recommendation and equivalence must come from deterministic code applied to the AI's material detection — not the model's free-form output. Reports gain a confidence score, methodology section and a cover banner. No UI redesign, no new pages.
 
 ---
 
-### 1. Smarter AI analysis (`src/lib/ai.functions.ts`)
+### 1. Deterministic factor table (single source of truth)
 
-Replace the current prompt + JSON schema with a sustainability-consultant prompt that returns a richer structure:
+New file `src/lib/waste-factors.ts` (shared by server + client). Exports:
 
 ```ts
-{
-  total_waste_kg: number,
-  materials: [{
-    name: "PET" | "HDPE" | "Other Plastic" | "Cardboard" | "Paper" |
-          "Glass" | "Aluminium" | "Other Metal" | "Organic" | "General",
-    weight_kg: number,
-    composition_pct: number,   // 0–100, all sum ≈ 100
-    recyclable: boolean,
-    confidence: number,        // 0–100
-    unit_value_zar_per_kg: number,
-    recoverable_value_zar: number
-  }],
-  recyclable_pct: number,                 // landfill diversion potential
-  circular_economy_score: number,         // 0–100
-  landfill_diversion_score: number,       // 0–100
-  carbon_kg: number,                      // kg CO2e avoided
-  estimated_savings_zar: number,          // annualised disposal savings
-  recoverable_value_total_zar: number,
-  equivalences: { trees_planted: number, km_not_driven: number, bottles_removed: number },
-  recommendations: string[],              // consultant-tone, SA context
-  highlight: string                       // single "biggest opportunity" line
+WASTE_FACTORS = {
+  "PET":            { value_per_kg: 7,  carbon_per_kg: 2.1, recyclable: true,  stream: "plastic" },
+  "HDPE":           { value_per_kg: 5,  carbon_per_kg: 1.8, recyclable: true,  stream: "plastic" },
+  "Other Plastic":  { value_per_kg: 2,  carbon_per_kg: 1.5, recyclable: true,  stream: "plastic" },
+  "Cardboard":      { value_per_kg: 3,  carbon_per_kg: 0.7, recyclable: true,  stream: "paper"   },
+  "Paper":          { value_per_kg: 2,  carbon_per_kg: 0.6, recyclable: true,  stream: "paper"   },
+  "Glass":          { value_per_kg: 1,  carbon_per_kg: 0.3, recyclable: true,  stream: "glass"   },
+  "Aluminium":      { value_per_kg: 25, carbon_per_kg: 1.8, recyclable: true,  stream: "metal"   },
+  "Other Metal":    { value_per_kg: 8,  carbon_per_kg: 1.5, recyclable: true,  stream: "metal"   },
+  "Organic":        { value_per_kg: 0,  carbon_per_kg: 0.5, recyclable: false, stream: "organic" },
+  "General":        { value_per_kg: 0,  carbon_per_kg: 0,   recyclable: false, stream: "general" },
 }
+LANDFILL_COST_PER_KG_ZAR = 1.20  // SA avg gate fee, used for annual savings
 ```
 
-Prompt rewrite tells the model to act as an SA circular-economy consultant, use realistic SA buy-back rates (PET ~R7/kg, HDPE ~R5, cardboard ~R1.5, aluminium ~R28, glass ~R0.5, paper ~R1.5), and write recommendations that quantify rand/kg/% impact (not "plastic bottles detected").
+Helpers: `computeMaterial(name, weight_kg)`, `computeEquivalences(carbonKg, divertedWeightKg)`, `buildRecommendations(materials[])`, `confidenceBand(score)`.
 
-Keep `materials` as a new column on `insights`; aggregate the legacy `classification` map server-side for backward compatibility so old rows still render.
+Equivalence formulas (rounded up to ≥1 when input > 0):
+- trees_planted = `ceil(carbonKg / 21)`
+- km_not_driven = `ceil(carbonKg / 0.18)`
+- bottles_recycled = `ceil(divertedPlasticKg / 0.025)` (25 g PET bottle)
 
-### 2. Database migration
+`buildRecommendations` is pure logic: for each detected material with weight > 0 it picks a templated SA consultant line ("Implement PET bottle recycling — ~R{value} recoverable at SA buy-back rates"). Adds contamination/general-waste lines, source-separation if 3+ streams present, composting if organic > 5%, etc. Never mentions an absent material.
 
-Add to `public.insights` (nullable, so old rows keep working):
+### 2. AI prompt slimmed down
 
-- `materials jsonb default '[]'`
-- `circular_economy_score numeric`
-- `landfill_diversion_score numeric`
-- `recoverable_value_zar numeric`
-- `equivalences jsonb default '{}'`
-- `highlight text`
+`src/lib/ai.functions.ts`: rewrite the system prompt so Gemini only returns:
+- `total_waste_kg`, `materials: [{name, weight_kg, composition_pct, confidence}]`, `confidence_score` (0–100), `summary`, `highlight`.
 
-GRANTs already cover the table; no policy changes needed.
+Drop all $ / carbon / recommendations / equivalences from the schema. Server then:
+1. Maps each material through `computeMaterial` → fills `recyclable`, `unit_value_zar_per_kg`, `recoverable_value_zar`, `carbon_kg`.
+2. Sums totals deterministically.
+3. Computes `circular_economy_score` = recyclable weight / total × 100, `landfill_diversion_score` = same, `recyclable_pct` = same.
+4. `estimated_savings_zar` = `divertedKg * LANDFILL_COST_PER_KG_ZAR * 52` (weekly→annual) + `recoverable_value_total`.
+5. Builds recommendations + equivalences via helpers.
+6. Persists `confidence_score` in new column.
 
-### 3. Dashboard data layer (`src/lib/dashboard.functions.ts`)
+Highlight is derived in code from the largest-value recyclable material (with model fallback).
 
-Extend the aggregator to compute and return:
+### 3. Migration
 
-- `kpis`: add `circularScore` (avg), `diversionScore` (avg), `recoverableValueZar` (sum), `recyclingPotentialPct` (= recyclablePct), plus equivalence totals (trees/km/bottles).
-- `materials`: array of `{ name, weight_kg, value_zar, recyclable }` summed across insights — feeds the bar chart, pie chart, value section.
-- `mixDonut`: `[{name:"Recyclable", value}, {name:"Landfill", value}]`.
-- Keep existing `series` and `classification` for back-compat.
+Add `confidence_score numeric` (nullable) to `public.insights`. Backfill existing rows = 75. GRANTs unchanged.
 
-### 4. Overview redesign (same page, richer content) — `dashboard.index.tsx`
+### 4. Dashboard data layer
 
-KPI grid expanded to 7 premium cards (glassmorphism, large numbers, brand greens):
-Total Waste Analyzed · Circular Economy Score · Landfill Diversion Score · Estimated Annual Savings · Carbon Avoided · Recoverable Material Value · Recycling Potential.
+`src/lib/dashboard.functions.ts`: add `confidenceScore` (avg of insights, ignoring nulls) and `confidenceBand` to `kpis`. Per-material carbon to `materials` aggregate so the table and PDF can display CO₂e per row.
 
-Two of these render as gauges, the rest as number cards:
+### 5. UI surface (no redesign)
 
-- **RadialGauge** component (Recharts `RadialBarChart`) for Circular Economy Score with band labels (Poor / Average / Good / Excellent).
-- **ProgressGauge** for Landfill Diversion Score using same band scale.
+- `MaterialTable.tsx`: add "Carbon avoided" column showing `kg CO₂e`. Already has weight / % / recyclable / value.
+- `dashboard.index.tsx`: replace the "AI Insights" KPI tile with an **AI Confidence** tile (`92% · High Confidence`, brand-green).
+- `dashboard.insights.tsx`: per-insight confidence chip next to "AI Analysis" badge.
+- Equivalence tiles: use the new helper so values never show 0 when carbon > 0.
 
-Charts row (Recharts, brand palette):
+### 6. PDF report (`dashboard.reports.tsx`)
 
-- Pie — waste composition % by material.
-- Bar — weight (kg) by material.
-- Line — waste trend over time (existing series, restyled).
-- Donut — Recyclable vs Landfill.
+Rewrite `downloadPDF` with structure:
 
-Carbon impact card shows kg CO₂e + the 3 equivalences with icons.
+1. **Cover** — full-width banner image + WasteIQ AI title, company, period, generated date.
+2. Executive Summary
+3. Key Metrics
+4. Material Breakdown (Material · Weight · % · Recyclable · Value R · Carbon kg CO₂e)
+5. Waste Composition
+6. Recoverable Material Value (summary + per-material)
+7. Carbon Impact (total + equivalences, never zero when carbon > 0)
+8. Recommendations (deterministic list from `buildRecommendations`)
+9. Future Improvement Opportunities
+10. **Methodology** — fixed paragraph: "Material composition is estimated using AI image analysis. Carbon impacts and economic values are calculated using deterministic South African benchmark factors. Annual savings are based on avoided landfill disposal costs and material recovery opportunities. Results are directional estimates and should be validated through physical waste audits."
+11. **Confidence Score** — large number + band, factor table footnote.
 
-### 5. Insights page upgrade — `dashboard.insights.tsx`
+CSV gains `confidence_score`, per-material carbon JSON.
 
-Each insight card becomes a mini-report:
+### 7. Banner asset
 
-- Header: date, image thumbnail (signed URL), `highlight` line as a chip.
-- Material breakdown table: `Material · Weight · % · Recyclable · Confidence` (the user's example shape).
-- Three small KPI tiles: Circular Score, Diversion Score, Recoverable Value.
-- Recommendations rendered as numbered consultant-tone insights.
-- "Insight cards" strip at top of page surfaces the best aggregate findings ("90% of this stream is recyclable", "Potential savings R3,500", "Highest opportunity: Cardboard").
-
-### 6. Analytics page — `dashboard.analytics.tsx`
-
-Adds the donut (recyclable vs landfill) and a horizontal bar of material value (R) alongside existing trend charts. Same page, no new route.
-
-### 7. Investor-grade PDF — `dashboard.reports.tsx`
-
-Rewrite `downloadPDF` with `jspdf` + `jspdf-autotable` (already common pair; will add `jspdf-autotable` if missing). Sections, in order:
-
-1. Cover (logo, company, period, generated date)
-2. Executive Summary (narrative built from KPIs + highlight)
-3. Waste Composition (table + pct)
-4. Material Breakdown (per-material table with weight/value/recyclability)
-5. Circular Economy Score (with band)
-6. Landfill Diversion Score (with band)
-7. Estimated Cost Savings
-8. Recoverable Material Value
-9. Carbon Impact (kg + equivalences)
-10. Recommendations (numbered)
-11. Future Improvement Opportunities (derived from low-scoring materials)
-
-CSV export gains the new columns. Generated reports are also written to `public.reports.payload` for history.
-
-### 8. New presentation components
-
-Under `src/components/dashboard/`:
-
-- `KpiCard.tsx` — glassmorphism premium card, optional trend, large number.
-- `RadialGauge.tsx` — Recharts radial bar with band label.
-- `ProgressGauge.tsx` — horizontal gauge with Poor→Excellent ticks.
-- `MaterialTable.tsx` — per-material breakdown table.
-- `InsightChip.tsx` — colored highlight pill.
-- `EquivalenceTile.tsx` — icon + label + value (trees/km/bottles).
-
-Uses existing tokens only (`--primary #009879`, `--primary-light #17B890`, bg `#F8FAFC`, text `#0F172A`); adds a `--glass` token + `backdrop-blur` utility in `styles.css`.
+Generate `src/assets/report-banner.jpg` (1600×400 wide, brand green, abstract circular-economy motif). Embed in PDF as base64 on the cover page (jsPDF `addImage`).
 
 ---
 
 ### Technical notes
 
-- AI model stays `google/gemini-2.5-flash` (multimodal, cheap). JSON-mode response, defensive parser, fallback shape preserved.
-- All new fields are nullable → old insight rows still render (UI falls back to legacy `classification`/`recyclable_pct`).
-- All math (scores, equivalences, totals) computed server-side in `dashboard.functions.ts` so the client stays presentational.
-- No new routes, no auth changes, no storage changes.
-- Bundle additions: `jspdf-autotable` (~30KB) only.
+- All factors live in `waste-factors.ts` — single edit point.
+- AI model still `google/gemini-2.5-flash`; lighter prompt = fewer hallucinations.
+- Old insight rows (without `confidence_score`) fall back to 75 / "Medium".
+- No new dependencies; banner asset shipped via Lovable Assets CDN.
+- No auth, storage, or schema changes beyond the additive `confidence_score` column.
 
-### Out of scope (per instructions)
+### Out of scope
 
-No redesign of layout/navigation, no new pages, no IoT/marketplace/smart bins, no auth or schema beyond the additive columns above.
+UI redesign, new pages, IoT/marketplace/carbon credits, manual weight overrides, multi-period comparisons.
