@@ -115,6 +115,7 @@ export type Database = {
           circular_economy_score: number | null
           classification: Json
           company_id: string
+          confidence_score: number | null
           created_at: string
           equivalences: Json
           estimated_savings_zar: number | null
@@ -134,6 +135,7 @@ export type Database = {
           circular_economy_score?: number | null
           classification?: Json
           company_id: string
+          confidence_score?: number | null
           created_at?: string
           equivalences?: Json
           estimated_savings_zar?: number | null
@@ -153,6 +155,7 @@ export type Database = {
           circular_economy_score?: number | null
           classification?: Json
           company_id?: string
+          confidence_score?: number | null
           created_at?: string
           equivalences?: Json
           estimated_savings_zar?: number | null
