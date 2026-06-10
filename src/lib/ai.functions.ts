@@ -154,7 +154,7 @@ export const analyzeUpload = createServerFn({ method: "POST" })
       highlight,
       recommendations,
       classification,
-      materials,
+      materials: materials as any,
       recyclable_pct,
       circular_economy_score,
       landfill_diversion_score,
@@ -162,7 +162,7 @@ export const analyzeUpload = createServerFn({ method: "POST" })
       recoverable_value_zar: recoverable_total,
       carbon_kg,
       total_waste_kg: Math.round(total_waste_kg * 10) / 10,
-      equivalences,
+      equivalences: equivalences as any,
       confidence_score,
     });
     if (insErr) throw new Error(insErr.message);
