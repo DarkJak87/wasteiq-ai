@@ -8,6 +8,7 @@ import { MaterialTable, type MaterialRow } from "@/components/dashboard/Material
 import { InsightChip } from "@/components/dashboard/InsightChip";
 import { ProgressGauge } from "@/components/dashboard/ProgressGauge";
 import { scoreBand } from "@/components/dashboard/RadialGauge";
+import { confidenceBand } from "@/lib/waste-factors";
 
 export const Route = createFileRoute("/_authenticated/dashboard/insights")({
   component: InsightsPage,
@@ -56,7 +57,20 @@ function InsightsPage() {
                 <Card key={i.id} className="p-5 backdrop-blur-xl bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0.65))]">
                   <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
                     <span>{new Date(i.created_at).toLocaleString()}</span>
-                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">AI Analysis</span>
+                    <div className="flex items-center gap-2">
+                      {i.confidence_score != null && (() => {
+                        const cb = confidenceBand(Number(i.confidence_score));
+                        return (
+                          <span
+                            className="rounded-full px-2 py-0.5 font-medium"
+                            style={{ background: `${cb.color}1a`, color: cb.color }}
+                          >
+                            {Math.round(Number(i.confidence_score))}% · {cb.label}
+                          </span>
+                        );
+                      })()}
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">AI Analysis</span>
+                    </div>
                   </div>
                   {i.highlight && (
                     <div className="mb-3 flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">

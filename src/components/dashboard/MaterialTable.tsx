@@ -7,6 +7,7 @@ export type MaterialRow = {
   recyclable: boolean;
   confidence?: number;
   recoverable_value_zar?: number;
+  carbon_kg?: number;
 };
 
 export function MaterialTable({ rows, compact = false }: { rows: MaterialRow[]; compact?: boolean }) {
@@ -20,8 +21,8 @@ export function MaterialTable({ rows, compact = false }: { rows: MaterialRow[]; 
             <th className="px-3 py-2 text-right">Weight</th>
             {!compact && <th className="px-3 py-2 text-right">%</th>}
             <th className="px-3 py-2 text-center">Recyclable</th>
-            {!compact && <th className="px-3 py-2 text-right">Confidence</th>}
             <th className="px-3 py-2 text-right">Value</th>
+            <th className="px-3 py-2 text-right">Carbon</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border/60">
@@ -35,8 +36,8 @@ export function MaterialTable({ rows, compact = false }: { rows: MaterialRow[]; 
                   ? <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary"><Check className="h-3 w-3" /> Yes</span>
                   : <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"><X className="h-3 w-3" /> No</span>}
               </td>
-              {!compact && <td className="px-3 py-2 text-right tabular-nums">{(m.confidence ?? 0).toFixed(0)}%</td>}
               <td className="px-3 py-2 text-right tabular-nums">R {(m.recoverable_value_zar ?? 0).toFixed(0)}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{(m.carbon_kg ?? 0).toFixed(1)} kg CO₂e</td>
             </tr>
           ))}
         </tbody>

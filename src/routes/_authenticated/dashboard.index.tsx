@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboardData } from "@/lib/dashboard.functions";
 import { Card } from "@/components/ui/card";
-import { Recycle, Leaf, Coins, Sparkles, TrendingDown, Trees, Car, Droplets, Banknote, Gauge } from "lucide-react";
+import { Recycle, Leaf, Coins, ShieldCheck, Trees, Car, Droplets, Banknote, Gauge } from "lucide-react";
 import {
   AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid,
   PieChart, Pie, Cell, Legend, BarChart, Bar,
@@ -12,6 +12,7 @@ import { KpiCard } from "@/components/dashboard/KpiCard";
 import { RadialGauge } from "@/components/dashboard/RadialGauge";
 import { ProgressGauge } from "@/components/dashboard/ProgressGauge";
 import { EquivalenceTile } from "@/components/dashboard/EquivalenceTile";
+import { confidenceBand } from "@/lib/waste-factors";
 
 export const Route = createFileRoute("/_authenticated/dashboard/")({
   component: Overview,
@@ -26,6 +27,8 @@ function Overview() {
 
   const k = data?.kpis;
   const fmt = (n?: number, d = 0) => (isLoading ? "—" : (n ?? 0).toFixed(d));
+  const conf = k?.confidenceScore ?? 0;
+  const cBand = confidenceBand(conf);
 
   return (
     <div className="space-y-6">
@@ -75,7 +78,13 @@ function Overview() {
         <KpiCard label="Total Waste Analyzed" value={`${fmt(k?.totalWasteKg)} kg`} icon={Recycle} sub={`${k?.totalInsights ?? 0} samples`} />
         <KpiCard label="Estimated Annual Savings" value={`R ${fmt(k?.savingsZar)}`} icon={Coins} sub="If recommendations applied" accent />
         <KpiCard label="Recoverable Material Value" value={`R ${fmt(k?.recoverableValueZar)}`} icon={Banknote} sub="Buy-back & recycler rates" />
-        <KpiCard label="AI Insights" value={k?.totalInsights ?? 0} icon={Sparkles} sub={`${k?.totalUploads ?? 0} uploads`} />
+        <KpiCard
+          label="AI Confidence"
+          value={`${conf}%`}
+          icon={ShieldCheck}
+          sub={`${cBand.label} confidence · ${k?.totalInsights ?? 0} samples`}
+          accent
+        />
       </div>
 
       {/* Charts row */}
